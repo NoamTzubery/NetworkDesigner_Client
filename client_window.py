@@ -175,7 +175,10 @@ class ClientWindow(QWidget):
             self.outputText.append(f"Error: {result}")
             return
 
+        # Add the action key for graph creation for easier server handling.
         request_data = result
+        request_data["action"] = "create_graph"
+
         self.outputText.append("Sending configuration to server...")
         try:
             response = await send_configuration(self.websocket, request_data)
