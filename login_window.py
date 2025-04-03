@@ -9,6 +9,7 @@ from PyQt5.QtGui import QFont
 from qasync import asyncSlot
 
 from client_window import ClientWindow
+from home_window import HomeWindow
 
 
 class LoginWindow(QDialog):
@@ -89,8 +90,8 @@ class LoginWindow(QDialog):
 
             # If we get here, login was successful. Open the client window.
             self.accept()
-            self.client_window = ClientWindow(self.websocket)
-            self.client_window.show()
+            self.home_window = HomeWindow(self.websocket)
+            self.home_window.show()
             self.close()
 
         except Exception as e:

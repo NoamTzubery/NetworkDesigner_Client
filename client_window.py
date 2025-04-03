@@ -3,9 +3,7 @@ import json
 import networkx as nx
 from networkx.readwrite import json_graph
 
-# ** We add Qt here to fix "name 'Qt' is not defined" **
 from PyQt5.QtCore import Qt
-
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QTextEdit, QComboBox, QGroupBox
@@ -15,19 +13,16 @@ from qasync import asyncSlot
 
 from graph_window import GraphWindow, VLANTabWindow
 from network_client import send_configuration
+from home_window import HomeWindow
 
 
 class ClientWindow(QWidget):
-    """
-    Main UI window that collects network configuration input, sends the data to the server,
-    displays the response, and allows the user to view the generated graphs.
-    """
-
     def __init__(self, websocket, parent=None):
         super().__init__(parent)
         self.websocket = websocket
         self.access_graph = None
         self.top_graph = None
+        self.parent_window = parent
         self.initUI()
 
     def initUI(self):
@@ -36,11 +31,24 @@ class ClientWindow(QWidget):
         main_layout.setContentsMargins(40, 40, 40, 40)
         main_layout.setSpacing(20)
 
-        # Title Label
+        # Header layout: Return button + Title
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(20)
+
+        self.returnHomeButton = QPushButton("⇐")
+        self.returnHomeButton.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        self.returnHomeButton.setFixedSize(60, 40)
+        self.returnHomeButton.setCursor(Qt.PointingHandCursor)
+        self.returnHomeButton.clicked.connect(self.on_return_home_clicked)
+
         title_label = QLabel("Network Topology Generator")
-        title_label.setAlignment(Qt.AlignCenter)  # <-- requires Qt import
-        title_label.setFont(QFont("Segoe UI", 24, QFont.Bold))
-        main_layout.addWidget(title_label)
+        title_label.setFont(QFont("Segoe UI", 20, QFont.Bold))
+        title_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        header_layout.addWidget(self.returnHomeButton)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
 
         # Group Box for Network Configuration inputs
         config_group = QGroupBox("Network Configuration")
@@ -72,11 +80,24 @@ class ClientWindow(QWidget):
         config_group.setLayout(config_layout)
         main_layout.addWidget(config_group)
 
-        # Generate Topology Button
+        # Generate Topology Button (with layout)
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 0, 0, 0)
+        button_layout.setSpacing(0)
+
         self.generateButton = QPushButton("Generate Topology")
-        self.generateButton.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        self.generateButton.setFont(QFont("Segoe UI", 15, QFont.Bold))
         self.generateButton.setMinimumHeight(50)
-        main_layout.addWidget(self.generateButton)
+        self.generateButton.setSizePolicy(
+            self.generateButton.sizePolicy().Expanding,
+            self.generateButton.sizePolicy().Preferred
+        )
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.generateButton)
+        button_layout.addStretch()
+
+        main_layout.addLayout(button_layout)
 
         # Graph Visualization Selection
         selection_group = QGroupBox("Graph Visualization")
@@ -113,6 +134,11 @@ class ClientWindow(QWidget):
         self.generateButton.clicked.connect(self.on_generate_clicked)
         self.viewGraphButton.clicked.connect(self.on_view_graph_clicked)
         self.showMaximized()
+
+    def on_return_home_clicked(self):
+        self.home_window = HomeWindow(self.websocket)
+        self.home_window.show()
+        self.close()
 
     def validate_inputs(self):
         try:
