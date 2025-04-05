@@ -3,14 +3,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-import asyncio
-import websockets
 
 
 class HomeWindow(QWidget):
-    def __init__(self, websocket, parent=None):
+    def __init__(self, dispatcher, parent=None):
         super().__init__(parent)
-        self.websocket = websocket
+        self.dispatcher = dispatcher
         self.setWindowTitle("Home")
         self.resize(500, 300)
         self.initUI()
@@ -39,14 +37,13 @@ class HomeWindow(QWidget):
         self.setLayout(layout)
 
     def open_create_topology(self):
-        from client_window import ClientWindow  # <- Import here to avoid circular import
-        self.client_window = ClientWindow(self.websocket)
+        from client_window import ClientWindow
+        self.client_window = ClientWindow(self.dispatcher)
         self.client_window.show()
-        self.hide()  # Hide instead of closing
+        self.hide()
 
     def open_show_topologies(self):
         from topology_history_window import TopologyHistoryWindow
-        self.history_window = TopologyHistoryWindow(self.websocket)
+        self.history_window = TopologyHistoryWindow(self.dispatcher)
         self.history_window.show()
-        self.hide()  # or just keep it open
-
+        self.hide()

@@ -1,8 +1,6 @@
 import json
 
 
-async def send_configuration(websocket, configuration):
-    await websocket.send(json.dumps(configuration))
-    response_str = await websocket.recv()
-    response = json.loads(response_str)
+async def send_configuration(dispatcher, configuration):
+    response = await dispatcher.send_and_wait(configuration)
     return response

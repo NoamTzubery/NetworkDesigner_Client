@@ -17,9 +17,9 @@ from home_window import HomeWindow
 
 
 class ClientWindow(QWidget):
-    def __init__(self, websocket, parent=None):
+    def __init__(self, dispatcher, parent=None):
         super().__init__(parent)
-        self.websocket = websocket
+        self.dispatcher = dispatcher
         self.access_graph = None
         self.top_graph = None
         self.parent_window = parent
@@ -136,7 +136,7 @@ class ClientWindow(QWidget):
         self.showMaximized()
 
     def on_return_home_clicked(self):
-        self.home_window = HomeWindow(self.websocket)
+        self.home_window = HomeWindow(self.dispatcher)
         self.home_window.show()
         self.close()
 
@@ -175,13 +175,12 @@ class ClientWindow(QWidget):
             self.outputText.append(f"Error: {result}")
             return
 
-        # Add the action key for graph creation for easier server handling.
         request_data = result
         request_data["action"] = "create_graph"
 
         self.outputText.append("Sending configuration to server...")
         try:
-            response = await send_configuration(self.websocket, request_data)
+            response = await send_configuration(self.dispatcher, request_data)
             if "error" in response:
                 self.outputText.append("Error from server: " + response["error"])
             else:

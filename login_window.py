@@ -8,8 +8,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from qasync import asyncSlot
 
-from client_window import ClientWindow
 from home_window import HomeWindow
+from client_window import ClientWindow
+from dispatcher import WebSocketDispatcher
 
 
 class LoginWindow(QDialog):
@@ -18,25 +19,23 @@ class LoginWindow(QDialog):
         self.setWindowTitle("Sign In / Sign Up")
         self.resize(400, 200)
         self.websocket = None
+        self.dispatcher = None
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
 
-        # Username
         self.username_label = QLabel("Username:")
         self.username_label.setFont(QFont("Segoe UI", 12))
         self.username_input = QLineEdit()
         self.username_input.setFont(QFont("Segoe UI", 12))
 
-        # Password
         self.password_label = QLabel("Password:")
         self.password_label.setFont(QFont("Segoe UI", 12))
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setFont(QFont("Segoe UI", 12))
 
-        # Buttons
         button_layout = QHBoxLayout()
         self.login_button = QPushButton("Login")
         self.login_button.setFont(QFont("Segoe UI", 12))
@@ -66,36 +65,32 @@ class LoginWindow(QDialog):
             return
 
         try:
-            # ** Disable keepalive pings for short-lived login attempt **
             self.websocket = await websockets.connect("ws://localhost:6789", ping_interval=None)
-
+            # Create the dispatcher right after connection.
+            self.dispatcher = WebSocketDispatcher(self.websocket)
             auth_data = {
                 "action": "login",
                 "username": username,
                 "password": password
             }
-            await self.websocket.send(json.dumps(auth_data))
-
-            # Attempt to read an error response (if any).
-            try:
-                response = await asyncio.wait_for(self.websocket.recv(), timeout=2)
-                response_data = json.loads(response)
-                if "error" in response_data:
-                    QMessageBox.critical(self, "Login Failed", response_data["error"])
-                    await self.websocket.close()
-                    return
-            except asyncio.TimeoutError:
-                # No immediate error, assume login OK
-                pass
-
-            # If we get here, login was successful. Open the client window.
-            self.accept()
-            self.home_window = HomeWindow(self.websocket)
-            self.home_window.show()
-            self.close()
-
+            # Use the dispatcher to send the login request and wait for a response.
+            response_data = await asyncio.wait_for(self.dispatcher.send_and_wait(auth_data), timeout=2)
+            if "error" in response_data:
+                QMessageBox.critical(self, "Login Failed", response_data["error"])
+                await self.websocket.close()
+                return
+        except asyncio.TimeoutError:
+            # No immediate error; assume login OK.
+            pass
         except Exception as e:
             QMessageBox.critical(self, "Connection Error", f"Error: {e}")
+            return
+
+        # On successful login, open the home window passing the dispatcher.
+        self.accept()
+        self.home_window = HomeWindow(self.dispatcher)
+        self.home_window.show()
+        self.close()
 
     @asyncSlot()
     async def on_signup_clicked(self):
@@ -106,7 +101,6 @@ class LoginWindow(QDialog):
             return
 
         try:
-            # ** Disable keepalive pings for short-lived sign-up attempt **
             async with websockets.connect("ws://localhost:6789", ping_interval=None) as websocket:
                 auth_data = {
                     "action": "signup",
