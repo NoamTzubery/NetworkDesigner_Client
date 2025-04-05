@@ -8,7 +8,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
 from qasync import asyncSlot
 from networkx.readwrite import json_graph
-from graph_window import GraphWindow
+from graph_window import GraphWindow, VLANTabWindow
 
 
 class TopologyHistoryWindow(QWidget):
@@ -131,9 +131,24 @@ class TopologyHistoryWindow(QWidget):
             print("[HistoryWindow] Error parsing access graph:", e)
             QMessageBox.critical(self, "Error", f"Failed to parse access graph: {e}")
             return
-        graph_widget = GraphWindow(access_graph, title="Access Graph", graph_type="access")
-        self.graph_frame_layout.addWidget(graph_widget)
-        print("[HistoryWindow] Access graph displayed.")
+
+        # Group nodes by VLAN (defaulting to 'Default' if not set)
+        vlan_to_nodes = {}
+        for node, data in access_graph.nodes(data=True):
+            vlan = data.get('vlan', 'Default')
+            vlan_to_nodes.setdefault(vlan, []).append(node)
+
+        if not vlan_to_nodes:
+            QMessageBox.information(self, "No VLAN Data", "No VLAN data found in the Access Graph.")
+            return
+
+        # Create subgraphs for each VLAN
+        vlan_subgraphs = {vlan: access_graph.subgraph(nodes).copy() for vlan, nodes in vlan_to_nodes.items()}
+
+        # Create the VLANTabWindow widget and add it to the graph frame layout
+        vlan_tabs_widget = VLANTabWindow(vlan_subgraphs)
+        self.graph_frame_layout.addWidget(vlan_tabs_widget)
+        print("[HistoryWindow] Access graph with VLAN tabs displayed.")
 
     def view_top_graph(self):
         if not self.selected_topology:
