@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, QTimer
 from qasync import asyncSlot
 from networkx.readwrite import json_graph
 from graph_window import GraphWindow, VLANTabWindow
+from home_window import HomeWindow  # Added import for HomeWindow
 
 
 class TopologyHistoryWindow(QWidget):
@@ -37,19 +38,29 @@ class TopologyHistoryWindow(QWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Top section: Refresh button and topology list
-        top_layout = QVBoxLayout()
+        # Top section: Refresh button, Return to Home button and topology list
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(10)
+
         self.refresh_button = QPushButton("Refresh Topologies")
         self.refresh_button.setFont(QFont("Segoe UI", 14))
-        # Use a lambda to schedule the async call
         self.refresh_button.clicked.connect(lambda: asyncio.create_task(self.load_topologies()))
+
+        self.return_home_button = QPushButton("Return to Home")
+        self.return_home_button.setFont(QFont("Segoe UI", 14))
+        self.return_home_button.clicked.connect(self.return_to_home)
+
+        top_layout.addWidget(self.refresh_button)
+        top_layout.addWidget(self.return_home_button)
 
         self.topology_list = QListWidget()
         self.topology_list.setFont(QFont("Segoe UI", 12))
         self.topology_list.itemSelectionChanged.connect(self.on_topology_selected)
 
-        top_layout.addWidget(self.refresh_button)
-        top_layout.addWidget(self.topology_list)
+        # Layout for top section (buttons + list)
+        top_section_layout = QVBoxLayout()
+        top_section_layout.addLayout(top_layout)
+        top_section_layout.addWidget(self.topology_list)
 
         # Middle section: A frame that will hold the graph view
         self.graph_frame = QFrame()
@@ -68,7 +79,7 @@ class TopologyHistoryWindow(QWidget):
         bottom_layout.addWidget(self.view_access_button)
         bottom_layout.addWidget(self.view_top_button)
 
-        main_layout.addLayout(top_layout)
+        main_layout.addLayout(top_section_layout)
         # Let the graph_frame expand
         main_layout.addWidget(self.graph_frame, stretch=1)
         main_layout.addLayout(bottom_layout)
@@ -79,6 +90,8 @@ class TopologyHistoryWindow(QWidget):
     @asyncSlot()
     async def load_topologies(self):
         print("[HistoryWindow] load_topologies() called.")
+        # Clear any currently displayed graph view
+        self.clear_graph_view()
         try:
             request_data = {"action": "get_history"}
             print("[HistoryWindow] Sending request:", request_data)
@@ -113,6 +126,7 @@ class TopologyHistoryWindow(QWidget):
 
     def clear_graph_view(self):
         print("[HistoryWindow] Clearing graph view.")
+        # Remove and delete all widgets from the graph frame layout.
         while self.graph_frame_layout.count():
             child = self.graph_frame_layout.takeAt(0)
             if child.widget():
@@ -166,3 +180,9 @@ class TopologyHistoryWindow(QWidget):
         graph_widget = GraphWindow(top_graph, title="Top Graph", graph_type="top")
         self.graph_frame_layout.addWidget(graph_widget)
         print("[HistoryWindow] Top graph displayed.")
+
+    def return_to_home(self):
+        # Instantiate and show the HomeWindow, then close this window.
+        self.home_window = HomeWindow(self.dispatcher)
+        self.home_window.show()
+        self.close()
