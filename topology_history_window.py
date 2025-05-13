@@ -9,7 +9,8 @@ from PyQt5.QtCore import Qt, QTimer
 from qasync import asyncSlot
 from networkx.readwrite import json_graph
 from graph_window import GraphWindow, VLANTabWindow
-from home_window import HomeWindow  # Added import for HomeWindow
+from home_window import HomeWindow
+from config_window import ConfigWindow
 
 
 class TopologyHistoryWindow(QWidget):
@@ -38,20 +39,16 @@ class TopologyHistoryWindow(QWidget):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Top section: Refresh button, Return to Home button and topology list
+        # Top section: Return to Home button and topology list
         top_layout = QHBoxLayout()
         top_layout.setSpacing(10)
-
-        self.refresh_button = QPushButton("Refresh Topologies")
-        self.refresh_button.setFont(QFont("Segoe UI", 14))
-        self.refresh_button.clicked.connect(lambda: asyncio.create_task(self.load_topologies()))
 
         self.return_home_button = QPushButton("Return to Home")
         self.return_home_button.setFont(QFont("Segoe UI", 14))
         self.return_home_button.clicked.connect(self.return_to_home)
 
-        top_layout.addWidget(self.refresh_button)
         top_layout.addWidget(self.return_home_button)
+        # The refresh button is removed from here
 
         self.topology_list = QListWidget()
         self.topology_list.setFont(QFont("Segoe UI", 12))
@@ -68,16 +65,20 @@ class TopologyHistoryWindow(QWidget):
         self.graph_frame_layout = QVBoxLayout()
         self.graph_frame.setLayout(self.graph_frame_layout)
 
-        # Bottom section: Buttons to view Access Graph and Top Graph
+        # Bottom section: Buttons to view Access Graph, Top Graph, and Configuration
         bottom_layout = QHBoxLayout()
         self.view_access_button = QPushButton("View Access Graph")
         self.view_access_button.setFont(QFont("Segoe UI", 14))
         self.view_top_button = QPushButton("View Top Graph")
         self.view_top_button.setFont(QFont("Segoe UI", 14))
+        self.view_config_button = QPushButton("View Configuration")
+        self.view_config_button.setFont(QFont("Segoe UI", 14))
         self.view_access_button.clicked.connect(self.view_access_graph)
         self.view_top_button.clicked.connect(self.view_top_graph)
+        self.view_config_button.clicked.connect(self.view_configuration)
         bottom_layout.addWidget(self.view_access_button)
         bottom_layout.addWidget(self.view_top_button)
+        bottom_layout.addWidget(self.view_config_button)
 
         main_layout.addLayout(top_section_layout)
         # Let the graph_frame expand
@@ -103,6 +104,15 @@ class TopologyHistoryWindow(QWidget):
             self.topologies = response_data.get("graphs", [])
             print("[HistoryWindow] Loaded topologies:", self.topologies)
             self.populate_list()
+            # Now that topologies are loaded, you can access the configurations
+            for topo in self.topologies:
+                access_config = topo.get("access_configuration")
+                top_config = topo.get("top_layer_configurations")
+                print(f"[HistoryWindow] Topology ID: {topo['id']}")
+                print(f"[HistoryWindow]   Access Configuration: {access_config}")
+                print(f"[HistoryWindow]   Top Configuration: {top_config}")
+                # In a future step, you might want to store these configurations
+                # in self.topologies or a separate data structure for later use.
         except Exception as e:
             print("[HistoryWindow] Exception in load_topologies:", e)
             QMessageBox.critical(self, "Error", f"Failed to load topologies: {e}")
@@ -180,6 +190,18 @@ class TopologyHistoryWindow(QWidget):
         graph_widget = GraphWindow(top_graph, title="Top Graph", graph_type="top")
         self.graph_frame_layout.addWidget(graph_widget)
         print("[HistoryWindow] Top graph displayed.")
+
+    def view_configuration(self):
+        if not self.selected_topology:
+            QMessageBox.warning(self, "Selection Error", "Please select a topology from the list.")
+            return
+
+        access_config = self.selected_topology.get("access_configuration", [])
+        top_config = self.selected_topology.get("top_layer_configurations", [])
+
+        self.config_window = ConfigWindow(access_config, top_config)
+        self.config_window.show()
+        print("[HistoryWindow] Configuration window opened.")
 
     def return_to_home(self):
         # Instantiate and show the HomeWindow, then close this window.

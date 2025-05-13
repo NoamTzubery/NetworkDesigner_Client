@@ -25,6 +25,8 @@ class ClientWindow(QWidget):
         self.top_graph = None
         self.access_configuration = None
         self.top_layer_configurations = None
+        self.access_configuration = []
+        self.top_layer_configurations = []
         self.initUI()
 
     def initUI(self):
@@ -137,8 +139,8 @@ class ClientWindow(QWidget):
         self.showMaximized()
 
     def on_return_home_clicked(self):
-        home = HomeWindow(self.dispatcher)
-        home.show()
+        self.home_window = HomeWindow(self.dispatcher)
+        self.home_window.show()
         self.close()
 
     def validate_inputs(self):
@@ -174,9 +176,9 @@ class ClientWindow(QWidget):
                 return self.outputText.append("Error from server: " + response["error"])
             # parse graphs
             self.access_graph = json_graph.node_link_graph(response['access_graph'])
-            self.top_graph    = json_graph.node_link_graph(response['top_graph'])
+            self.top_graph = json_graph.node_link_graph(response['top_graph'])
             # store configs
-            self.access_configuration     = response.get('access_configuration', [])
+            self.access_configuration = response.get('access_configuration', [])
             self.top_layer_configurations = response.get('top_layer_configurations', [])
             # summary
             self.outputText.append(
