@@ -23,8 +23,6 @@ class ClientWindow(QWidget):
         self.dispatcher = dispatcher
         self.access_graph = None
         self.top_graph = None
-        self.access_configuration = None
-        self.top_layer_configurations = None
         self.access_configuration = []
         self.top_layer_configurations = []
         self.initUI()
@@ -59,16 +57,19 @@ class ClientWindow(QWidget):
         config_layout = QGridLayout()
         config_layout.setHorizontalSpacing(20)
         config_layout.setVerticalSpacing(15)
-        labels_and_fields = [
+
+        labels_and_placeholders = [
+            ("Topology Name:", "Untitled Topology"),
             ("Number of Routers:", "2"),
             ("Number of MultiLayer Switches:", "2"),
             ("Number of Switches:", "4"),
             ("Number of Computers:", "15"),
+            ("VLAN Count (-1 for auto):", "-1"),
             ("Mode (0: Fault-tolerant, 1: Scalable):", "1"),
             ("IP Base (e.g., 192.168.0.0):", "192.168.0.0")
         ]
         self.input_fields = []
-        for row, (label_text, placeholder) in enumerate(labels_and_fields):
+        for row, (label_text, placeholder) in enumerate(labels_and_placeholders):
             lbl = QLabel(label_text)
             lbl.setFont(QFont("Segoe UI", 14))
             fld = QLineEdit()
@@ -87,10 +88,6 @@ class ClientWindow(QWidget):
         self.generateButton = QPushButton("Generate Topology")
         self.generateButton.setFont(QFont("Segoe UI", 15, QFont.Bold))
         self.generateButton.setMinimumHeight(50)
-        self.generateButton.setSizePolicy(
-            self.generateButton.sizePolicy().Expanding,
-            self.generateButton.sizePolicy().Preferred
-        )
         btn_layout.addWidget(self.generateButton)
         btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
@@ -145,55 +142,84 @@ class ClientWindow(QWidget):
 
     def validate_inputs(self):
         try:
-            # parse with defaults
-            vals = []
-            defaults = [2,2,4,15,1]
-            for i in range(5):
-                txt = self.input_fields[i].text()
-                vals.append(int(txt) if txt else defaults[i])
-            ipb = self.input_fields[5].text() or "192.168.0.0"
-            if min(vals) < 1 or vals[4] not in (0,1):
-                return False, "Check your device counts and mode."
+            name = self.input_fields[0].text().strip() or "Untitled Topology"
+
+            # numeric fields
+            defaults = [2, 2, 4, 15]
+            nums = []
+            for i, default in enumerate(defaults, start=1):
+                txt = self.input_fields[i].text().strip()
+                val = int(txt) if txt else default
+                if val < 1:
+                    return False, "Device counts must be ≥ 1."
+                nums.append(val)
+
+            # VLAN count
+            vlan_txt = self.input_fields[5].text().strip()
+            vlan_count = int(vlan_txt) if vlan_txt else -1
+            if vlan_count == 0 or vlan_count < -1:
+                return False, "VLAN Count must be > 0 or -1."
+
+            # mode
+            mode_txt = self.input_fields[6].text().strip()
+            mode = int(mode_txt) if mode_txt else 1
+            if mode not in (0, 1):
+                return False, "Mode must be 0 or 1."
+
+            # IP Base
+            ipb = self.input_fields[7].text().strip() or "192.168.0.0"
             try:
                 ipaddress.IPv4Address(ipb)
             except ValueError:
                 return False, "Invalid IP Base format."
-            keys = ["num_routers","num_mls","num_switches","num_computers","mode"]
-            return True, dict(zip(keys, vals)) | {"ip_base": ipb}
+
+            return True, {
+                "topology_name": name,
+                "num_routers": nums[0],
+                "num_mls": nums[1],
+                "num_switches": nums[2],
+                "num_computers": nums[3],
+                "vlan_count": vlan_count,
+                "mode": mode,
+                "ip_base": ipb
+            }
         except ValueError:
-            return False, "Please enter valid integers."
+            return False, "Please enter valid integers for counts, mode, and VLAN."
 
     @asyncSlot()
     async def on_generate_clicked(self):
         valid, result = self.validate_inputs()
         if not valid:
             return self.outputText.append(f"Error: {result}")
-        request_data = {**result, "action":"create_graph"}
+
+        request_data = {**result, "action": "create_graph"}
         self.outputText.append("Sending configuration to server...")
         try:
             response = await send_configuration(self.dispatcher, request_data)
             if "error" in response:
                 return self.outputText.append("Error from server: " + response["error"])
-            # parse graphs
+
             self.access_graph = json_graph.node_link_graph(response['access_graph'])
             self.top_graph = json_graph.node_link_graph(response['top_graph'])
-            # store configs
             self.access_configuration = response.get('access_configuration', [])
             self.top_layer_configurations = response.get('top_layer_configurations', [])
-            # summary
+
+            # Summary
             self.outputText.append(
                 f"Graphs received! Access nodes: {len(self.access_graph)}, "
                 f"Top nodes: {len(self.top_graph)}."
             )
-            # dump configs
-            for label, cfg in [("Access Configuration", self.access_configuration),
-                               ("Top-Layer Configuration", self.top_layer_configurations)]:
+            # Dump configs
+            for label, cfg in [
+                ("Access Configuration", self.access_configuration),
+                ("Top-Layer Configuration", self.top_layer_configurations)
+            ]:
                 self.outputText.append(f"{label}:")
                 if isinstance(cfg, list):
-                    for i, entry in enumerate(cfg,1):
+                    for i, entry in enumerate(cfg, 1):
                         self.outputText.append(f"  [{i}] {entry!r}")
                 elif isinstance(cfg, dict):
-                    for k,v in cfg.items():
+                    for k, v in cfg.items():
                         self.outputText.append(f"  • {k}: {v!r}")
                 else:
                     self.outputText.append(f"  {cfg!r}")
@@ -205,12 +231,12 @@ class ClientWindow(QWidget):
             return self.outputText.append("No graph data available.")
         if self.graphSelector.currentText() == "Access Graph":
             vlan_to_nodes = {}
-            for node,data in self.access_graph.nodes(data=True):
-                vlan_to_nodes.setdefault(data.get('vlan','Default'),[]).append(node)
+            for node, data in self.access_graph.nodes(data=True):
+                vlan_to_nodes.setdefault(data.get('vlan', 'Default'), []).append(node)
             if not vlan_to_nodes:
                 return self.outputText.append("No VLAN data in Access Graph.")
             subgraphs = {v: self.access_graph.subgraph(nodes).copy()
-                         for v,nodes in vlan_to_nodes.items()}
+                         for v, nodes in vlan_to_nodes.items()}
             self.vlan_tabs_window = VLANTabWindow(subgraphs)
             self.vlan_tabs_window.show()
         else:
