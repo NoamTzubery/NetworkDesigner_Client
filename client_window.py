@@ -144,7 +144,7 @@ class ClientWindow(QWidget):
         try:
             name = self.input_fields[0].text().strip() or "Untitled Topology"
 
-            # numeric fields
+            # numeric fields: routers, multilayer switches, switches, computers
             defaults = [2, 2, 4, 15]
             nums = []
             for i, default in enumerate(defaults, start=1):
@@ -154,11 +154,28 @@ class ClientWindow(QWidget):
                     return False, "Device counts must be ≥ 1."
                 nums.append(val)
 
+            num_routers, num_mls, num_switches, num_computers = nums
+
+            # --- New check: switches vs computers ---
+            # need at least 1 switch per 7 computers
+            if num_computers > num_switches * 7:
+                return False, (
+                    f"With {num_computers} computers, you need at least "
+                    f"{(num_computers + 6)//7} switches (1 per 7 computers)."
+                )
+
             # VLAN count
             vlan_txt = self.input_fields[5].text().strip()
             vlan_count = int(vlan_txt) if vlan_txt else -1
             if vlan_count == 0 or vlan_count < -1:
                 return False, "VLAN Count must be > 0 or -1."
+
+            # --- New check: switches vs VLANs ---
+            # if VLAN count is not auto (-1), max VLANs == num_switches
+            if vlan_count != -1 and vlan_count > num_switches:
+                return False, (
+                    f"With {num_switches} switches, maximum VLANs is {num_switches}."
+                )
 
             # mode
             mode_txt = self.input_fields[6].text().strip()
@@ -175,16 +192,17 @@ class ClientWindow(QWidget):
 
             return True, {
                 "topology_name": name,
-                "num_routers": nums[0],
-                "num_mls": nums[1],
-                "num_switches": nums[2],
-                "num_computers": nums[3],
+                "num_routers": num_routers,
+                "num_mls": num_mls,
+                "num_switches": num_switches,
+                "num_computers": num_computers,
                 "vlan_count": vlan_count,
                 "mode": mode,
                 "ip_base": ipb
             }
         except ValueError:
             return False, "Please enter valid integers for counts, mode, and VLAN."
+
 
     @asyncSlot()
     async def on_generate_clicked(self):

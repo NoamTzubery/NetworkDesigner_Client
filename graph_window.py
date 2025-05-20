@@ -18,7 +18,7 @@ class GraphWindow(QWidget):
     def __init__(self, graph, title="Graph Visualization", graph_type="top", parent=None):
         super().__init__(parent)
         self.graph = graph
-        self.graph_type = graph_type  # "top" for layered, "access" for standard layout
+        self.graph_type = graph_type  # "top" for layered, anything else for standard layout
         print("[GraphWindow] Initializing with graph_type:", self.graph_type)
         sys.stdout.flush()
         self.setWindowTitle(title)
@@ -92,10 +92,12 @@ class GraphWindow(QWidget):
             'Distribution': 0.6,
             'Core': 0.3
         }
+        # where each node belongs
         node_layers = {n: self.graph.nodes[n].get('layer', 'Access') for n in self.graph.nodes()}
         spacing = 150
         pos = {}
 
+        # calculate positions
         for layer_name, y in layers.items():
             nodes = [n for n, l in node_layers.items() if l == layer_name]
             print(f"[draw_layered_topology] Layer '{layer_name}' has {len(nodes)} nodes")
@@ -106,13 +108,33 @@ class GraphWindow(QWidget):
                 sys.stdout.flush()
 
         pen = QPen(Qt.white, 2)
-        # edges
-        for u, v in self.graph.edges():
-            if u in pos and v in pos:
-                x1, y1 = pos[u]; x2, y2 = pos[v]
-                self.scene.addLine(x1, y1, x2, y2, pen)
 
-        # nodes
+        # 1) connect every node in each layer to every node in the *next* layer
+        active_layers = [L for L in ['Access', 'Distribution', 'Core']
+                         if any(node_layers[n] == L for n in node_layers)]
+        for L1, L2 in zip(active_layers, active_layers[1:]):
+            nodes1 = [n for n in node_layers if node_layers[n] == L1]
+            nodes2 = [n for n in node_layers if node_layers[n] == L2]
+            for u in nodes1:
+                for v in nodes2:
+                    if u in pos and v in pos:
+                        x1, y1 = pos[u]; x2, y2 = pos[v]
+                        self.scene.addLine(x1, y1, x2, y2, pen)
+
+        # === NEW: also fully mesh the *upper* layers among themselves ===
+        # for 3-tier that's Distribution & Core,
+        # for 2-tier that's just Core
+        upper_layers = active_layers[1:]  # skip the bottom (Access)
+        for L in upper_layers:
+            same = [n for n in node_layers if node_layers[n] == L]
+            for i in range(len(same)):
+                for j in range(i + 1, len(same)):
+                    u, v = same[i], same[j]
+                    if u in pos and v in pos:
+                        x1, y1 = pos[u]; x2, y2 = pos[v]
+                        self.scene.addLine(x1, y1, x2, y2, pen)
+
+        # draw nodes
         for node, (x, y) in pos.items():
             print(f"[draw_layered_topology] Drawing node '{node}' at ({x}, {y})")
             sys.stdout.flush()
